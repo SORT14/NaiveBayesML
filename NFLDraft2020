@@ -1,0 +1,114 @@
+Draft Status and Recruiting Services
+SORT14
+February 2, 2020
+Packages used.
+
+library(naivebayes)
+## Warning: package 'naivebayes' was built under R version 3.6.2
+## naivebayes 0.9.6 loaded
+library(dplyr)
+## 
+## Attaching package: 'dplyr'
+## The following objects are masked from 'package:stats':
+## 
+##     filter, lag
+## The following objects are masked from 'package:base':
+## 
+##     intersect, setdiff, setequal, union
+library(ggplot2)
+library(psych)
+## 
+## Attaching package: 'psych'
+## The following objects are masked from 'package:ggplot2':
+## 
+##     %+%, alpha
+df <- read.csv("draft_nb.csv")
+str(df)
+## 'data.frame':    908 obs. of  5 variables:
+##  $ Name  : Factor w/ 908 levels "A'Shawn Robinson",..: 2 3 4 5 6 7 8 9 10 11 ...
+##  $ Pos   : Factor w/ 9 levels "ATH","DB","DL",..: 2 6 9 5 8 7 3 2 3 4 ...
+##  $ Votes : int  1 1 3 3 4 1 2 2 4 1 ...
+##  $ Avg_rk: num  120 150 92 75.7 59 ...
+##  $ Status: Factor w/ 2 levels "Drafted","UD": 2 2 1 2 2 2 2 2 1 2 ...
+Data preview
+
+xtabs(~Status+Votes,data = df)
+##          Votes
+## Status      1   2   3   4
+##   Drafted  36  32  45 146
+##   UD      236 100 132 181
+xtabs(~Status+Pos,data = df)
+##          Pos
+## Status    ATH DB DL LB OL QB RB TE WR
+##   Drafted  20 44 64 23 34 15 31  5 23
+##   UD       49 97 99 82 99 53 54 24 92
+Visualization: Density Graph
+
+df %>% 
+  ggplot(aes(x=Votes,fill=Status))+
+  geom_density(alpha=0.08,color='black')+
+  ggtitle("Draft Status by Votes")
+ Data Partition: Splitting the data into testing and training sets
+
+set.seed(1234)
+ind <- sample(2,nrow(df),replace = T,prob = c(0.8,0.2))
+train <- df[ind==1,]
+test <- df[ind==2,]
+Creating the Naive Bayes Model
+
+mod <- naive_bayes(Status~.,data = train,usekernel = T)
+## Warning: naive_bayes(): Feature Name - zero probabilities are present.
+## Consider Laplace smoothing.
+Preview the mean and standard deviations for ‘Votes’.
+
+train %>% 
+  filter(Status=="Drafted") %>% 
+  summarise(mean(Votes),sd(Votes))
+##   mean(Votes) sd(Votes)
+## 1    3.145729  1.084263
+Create some plots to review. Checking for collinearity.
+
+plot(mod)
+
+
+Build predictive model
+
+p <- predict(mod,train,type = 'prob')
+## Warning: predict.naive_bayes(): More features in the newdata are provided
+## as there are probability tables in the object. Calculation is performed
+## based on features to be found in the tables.
+probs <- (cbind(p,train))
+head(cbind(p,train))
+##      Drafted        UD            Name Pos Votes Avg_rk  Status
+## 1 0.04683969 0.9531603    A.J. Leggett  DB     1 120.00      UD
+## 2 0.02625782 0.9737422    Aaron Bailey  QB     1 150.00      UD
+## 3 0.40306098 0.5969390 Aaron Burbridge  WR     3  92.00 Drafted
+## 4 0.09671831 0.9032817     Abdul Bello  OL     3  75.67      UD
+## 6 0.06014145 0.9398585     Adam Choice  RB     1 109.00      UD
+## 7 0.12335405 0.8766459     Adam McLean  DL     2 105.00      UD
+Construct first Confusion Matrix - train data
+
+p1 <- predict(mod,train)
+## Warning: predict.naive_bayes(): More features in the newdata are provided
+## as there are probability tables in the object. Calculation is performed
+## based on features to be found in the tables.
+(tab1 <- table(p1,train$Status))
+##          
+## p1        Drafted  UD
+##   Drafted     147  30
+##   UD           52 488
+1-sum(diag(tab1))/sum(tab1)
+## [1] 0.1143654
+Construct second Confusion Matrix - test data
+
+p2 <- predict(mod,test)
+## Warning: predict.naive_bayes(): More features in the newdata are provided
+## as there are probability tables in the object. Calculation is performed
+## based on features to be found in the tables.
+(tab2 <- table(p2,test$Status))
+##          
+## p2        Drafted  UD
+##   Drafted      22  18
+##   UD           38 113
+1-sum(diag(tab2))/sum(tab2)
+## [1] 0.2931937
